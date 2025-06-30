@@ -28,8 +28,8 @@
 
 #pragma once
 
-#include <realtime_tools/realtime_buffer.h>
-#include <realtime_tools/realtime_server_goal_handle.h>
+#include <realtime_tools/realtime_buffer.hpp>
+#include <realtime_tools/realtime_server_goal_handle.hpp>
 
 #include <memory>
 #include <optional>
