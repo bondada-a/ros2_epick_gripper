@@ -1,11 +1,13 @@
-# ROS2 Robotiq EPick Gripper
+# ROS2 Robotiq EPick Gripper for erobs
 
 [![CI](https://github.com/PickNikRobotics/ros2_epick_gripper/actions/workflows/industrial_ci.yml/badge.svg)](https://github.com/PickNikRobotics/ros2_epick_gripper/actions/workflows/industrial_ci.yml)
 [![Format](https://github.com/PickNikRobotics/ros2_epick_gripper/actions/workflows/ci-format.yml/badge.svg)](https://github.com/PickNikRobotics/ros2_epick_gripper/actions/workflows/ci-format.yml)
 [![Linters](https://github.com/PickNikRobotics/ros2_epick_gripper/actions/workflows/ci-ros-lint.yml/badge.svg)](https://github.com/PickNikRobotics/ros2_epick_gripper/actions/workflows/ci-ros-lint.yml)
 
-This repository contains the ROS 2 driver, controller, and description packages for working with a Robotiq EPick Gripper.
-
+This repository contains the ROS 2 driver, controller, and description packages for working with a Robotiq EPick Gripper for erobs. 
+- Removed epick_moveit_studio
+- Updated suction cup description - [todo]
+  
 ## Hardware Interface
 
 The `epick_driver` package serves as a ROS 2 Hardware Interface for the Robotiq EPick Gripper, enabling direct interaction with the gripper hardware.
