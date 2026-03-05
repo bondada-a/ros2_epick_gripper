@@ -109,6 +109,12 @@ public:
   EPICK_DRIVER_PUBLIC
   CallbackReturn on_init(const hardware_interface::HardwareInfo& info) override;
 
+  // Jazzy-compatible overload: HardwareComponentInterfaceParams wraps HardwareInfo
+  // and is the preferred signature in ros2_control >= 4.17.0 (Jazzy).
+  // The HardwareInfo overload above is deprecated but still functional.
+  // When the deprecated overload is removed upstream, uncomment below:
+  // CallbackReturn on_init(const hardware_interface::HardwareComponentInterfaceParams& info) override;
+
   /**
    * Connect to the hardware.
    * @param previous_state The previous state.
