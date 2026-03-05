@@ -207,7 +207,7 @@ TEST_F(TestEpickHardware, grip)
   hardware_interface::HardwareInfo info;
   info.name = "EpickGripperHardwareInterface";
   info.type = "system";
-  info.hardware_class_type = "epick_driver/EpickGripperHardwareInterface";
+  info.hardware_plugin_name = "epick_driver/EpickGripperHardwareInterface";
   info.joints = { joint };
   info.gpios = { gpio };
 
