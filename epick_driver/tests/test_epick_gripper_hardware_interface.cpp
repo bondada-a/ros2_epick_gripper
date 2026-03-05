@@ -36,11 +36,18 @@
 #include <epick_driver/default_driver_factory.hpp>
 #include <epick_driver/fake/fake_driver.hpp>
 
+// Suppress Jazzy deprecation warnings for get_value() and import_component.
+// These APIs still function but are scheduled for removal in Kilted Kaiju.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 #include <hardware_interface/loaned_command_interface.hpp>
 #include <hardware_interface/loaned_state_interface.hpp>
+#pragma GCC diagnostic pop
+
 #include <hardware_interface/resource_manager.hpp>
 #include <hardware_interface/types/lifecycle_state_names.hpp>
 #include <lifecycle_msgs/msg/state.hpp>
+#include <rclcpp/node.hpp>
 #include <rclcpp_lifecycle/state.hpp>
 #include <ros2_control_test_assets/components_urdfs.hpp>
 #include <ros2_control_test_assets/descriptions.hpp>
@@ -52,6 +59,26 @@ using ::testing::Eq;
 
 using hardware_interface_utils::is_false;
 using hardware_interface_utils::is_true;
+
+// Jazzy ResourceManager requires clock + logger interfaces from a node.
+// This wrapper follows the pattern from robotiq_hande_driver jazzy-devel.
+class TestableResourceManager : public hardware_interface::ResourceManager
+{
+public:
+  explicit TestableResourceManager(rclcpp::Node& node)
+    : hardware_interface::ResourceManager(
+          node.get_node_clock_interface(), node.get_node_logging_interface())
+  {
+  }
+
+  explicit TestableResourceManager(rclcpp::Node& node, const std::string& urdf,
+                                    bool activate_all = false, unsigned int cm_update_rate = 100)
+    : hardware_interface::ResourceManager(
+          urdf, node.get_node_clock_interface(), node.get_node_logging_interface(),
+          activate_all, cm_update_rate)
+  {
+  }
+};
 
 // This factory will populate the injected driver with data read form the HardwareInfo.
 class TestDriverFactory : public DefaultDriverFactory
@@ -69,6 +96,23 @@ protected:
 
 private:
   mutable std::unique_ptr<Driver> driver_;
+};
+
+// Test fixture: initializes rclcpp once for all tests.
+class TestEpickHardware : public ::testing::Test
+{
+protected:
+  static void SetUpTestCase()
+  {
+    rclcpp::init(0, nullptr);
+  }
+
+  static void TearDownTestCase()
+  {
+    rclcpp::shutdown();
+  }
+
+  rclcpp::Node node_{ "test_epick_gripper" };
 };
 
 /**
@@ -95,7 +139,7 @@ bool wait_for_condition(std::function<bool()> condition, std::chrono::millisecon
  * This test generates a minimal xacro robot configuration and loads the
  * hardware interface plugin.
  */
-TEST(TestEpickGripperHardwareInterface, load_urdf)
+TEST_F(TestEpickHardware, load_urdf)
 {
   std::string urdf_control_ =
       R"(
@@ -115,7 +159,7 @@ TEST(TestEpickGripperHardwareInterface, load_urdf)
        )";
 
   auto urdf = ros2_control_test_assets::urdf_head + urdf_control_ + ros2_control_test_assets::urdf_tail;
-  hardware_interface::ResourceManager rm(urdf);
+  TestableResourceManager rm(node_, urdf);
 
   // Check interfaces
   EXPECT_EQ(1u, rm.system_components_size());
@@ -125,46 +169,57 @@ TEST(TestEpickGripperHardwareInterface, load_urdf)
  * In this test we startup the hardware interface with a fake driver so we can
  * test read and write operations.
  */
-TEST(TestEpickGripperHardwareInterface, grip)
+TEST_F(TestEpickHardware, grip)
 {
   auto driver = std::make_unique<FakeDriver>();
 
   auto hardware = std::make_unique<epick_driver::EpickGripperHardwareInterface>(
       std::make_unique<TestDriverFactory>(std::move(driver)));
 
-  // clang-format off
-  hardware_interface::HardwareInfo info{
-    "EpickGripperHardwareInterface",
-    "system",
-    "epick_driver/EpickGripperHardwareInterface",
-    {},  // parameters.
-    {
-      {
-        "gripper",
-        "joint",
-        {},
-        { { "position", "", "", "", "double", 1 } },
-        { {} }
-      }
-    },
-    {},  // Sensors.
-    {
-      {
-        "gripper",
-        "GPIO",
-        { { "grip_cmd", "", "", "", "double", 1 } },
-        { { "grip_cmd", "", "", "", "double", 1 }, { "object_detection_status", "", "", "", "double", 1 } },
-        { {} }
-      }
-    },
-    {},  // Transmission.
-    ""   // original xml.
-  };
-  // clang-format on
+  // Build HardwareInfo using field assignment (not aggregate init) to be
+  // resilient to struct layout changes between ROS 2 distributions.
+  hardware_interface::InterfaceInfo position_si;
+  position_si.name = "position";
+  position_si.data_type = "double";
+  position_si.size = 1;
+
+  hardware_interface::ComponentInfo joint;
+  joint.name = "gripper";
+  joint.type = "joint";
+  joint.state_interfaces = { position_si };
+
+  hardware_interface::InterfaceInfo grip_cmd_iface;
+  grip_cmd_iface.name = "grip_cmd";
+  grip_cmd_iface.data_type = "double";
+  grip_cmd_iface.size = 1;
+
+  hardware_interface::InterfaceInfo obj_det_iface;
+  obj_det_iface.name = "object_detection_status";
+  obj_det_iface.data_type = "double";
+  obj_det_iface.size = 1;
+
+  hardware_interface::ComponentInfo gpio;
+  gpio.name = "gripper";
+  gpio.type = "GPIO";
+  gpio.command_interfaces = { grip_cmd_iface };
+  gpio.state_interfaces = { grip_cmd_iface, obj_det_iface };
+
+  hardware_interface::HardwareInfo info;
+  info.name = "EpickGripperHardwareInterface";
+  info.type = "system";
+  info.hardware_class_type = "epick_driver/EpickGripperHardwareInterface";
+  info.joints = { joint };
+  info.gpios = { gpio };
 
   // Load the component.
-  hardware_interface::ResourceManager rm;
+  // Note: import_component(unique_ptr, HardwareInfo) is deprecated in Jazzy
+  // in favor of import_component(unique_ptr, HardwareComponentParams), but
+  // the old signature still functions.
+  TestableResourceManager rm(node_);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
   rm.import_component(std::move(hardware), info);
+#pragma GCC diagnostic pop
 
   // Connect the hardware.
   rclcpp_lifecycle::State active_state{ lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE,
@@ -187,18 +242,24 @@ TEST(TestEpickGripperHardwareInterface, grip)
   // Claim the gripper/grip_cmd gpio command interface.
   hardware_interface::LoanedCommandInterface gripper_gpio_command_interface =
       rm.claim_command_interface("gripper/grip_cmd");
-  ASSERT_TRUE(is_false(gripper_gpio_command_interface.get_value()));
 
   // Claim the gripper/grip_cmd gpio state interface.
   hardware_interface::LoanedStateInterface gripper_gpio_state_interface = rm.claim_state_interface("gripper/grip_cmd");
-  ASSERT_TRUE(is_false(gripper_gpio_state_interface.get_value()));
 
   // Claim the gripper/position joint state interface.
   hardware_interface::LoanedStateInterface gripper_joint_state_interface = rm.claim_state_interface("gripper/position");
+
+  // Suppress deprecation warnings for get_value() / set_value() in test assertions.
+  // These are deprecated in favor of get_optional<T>() in Jazzy, removed in Kilted.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+
+  ASSERT_TRUE(is_false(gripper_gpio_command_interface.get_value()));
+  ASSERT_TRUE(is_false(gripper_gpio_state_interface.get_value()));
   ASSERT_TRUE(is_false(gripper_joint_state_interface.get_value()));
 
   // Ask the gripper to grip.
-  gripper_gpio_command_interface.set_value(1.0);
+  (void)gripper_gpio_command_interface.set_value(1.0);
   rm.write(rclcpp::Time{}, rclcpp::Duration::from_seconds(0));
 
   auto gripper_gripping = [&]() {
@@ -212,7 +273,7 @@ TEST(TestEpickGripperHardwareInterface, grip)
   ASSERT_TRUE(is_true(gripper_joint_state_interface.get_value()));
 
   // Ask the gripper to release.
-  gripper_gpio_command_interface.set_value(0.0);
+  (void)gripper_gpio_command_interface.set_value(0.0);
   rm.write(rclcpp::Time{}, rclcpp::Duration::from_seconds(0));
 
   auto gripper_released = [&]() {
@@ -224,6 +285,8 @@ TEST(TestEpickGripperHardwareInterface, grip)
 
   // Test the content of the optional joint.
   ASSERT_TRUE(is_false(gripper_joint_state_interface.get_value()));
+
+#pragma GCC diagnostic pop
 
   // Deactivate the hardware.
   rclcpp_lifecycle::State inactive_state{ lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE,

@@ -34,6 +34,7 @@ target_include_directories(test_epick_gripper_hardware_interface
 )
 target_link_libraries(test_epick_gripper_hardware_interface epick_driver)
 ament_target_dependencies(test_epick_gripper_hardware_interface
+    rclcpp
     ros2_control_test_assets
 )
 
