@@ -47,20 +47,17 @@
     <!-- Body -->
     <!-- inherits prefix, parent and origin_*, exposes body_link, body_length, body_color -->
     <xacro:epick_body parent="${parent}"/>
-    <xacro:property name="suction_cup_parent" value="${body_link}"/>
-    <xacro:property name="suction_cup_parent_length" value="${body_length}"/>
 
-    <!-- Extension (optional) -->
-    <xacro:if value="${extension_length * extension_radius > 0.0}">
-        <xacro:property name="suction_cup_parent" value="${prefix}epick_extension"/>
-        <xacro:property name="suction_cup_parent_length" value="${extension_length}"/>
-        <xacro:cylinder_link name="${prefix}epick_extension"
-                             radius="${extension_radius}"
-                             length="${extension_length}"
-                             color="${body_color}"
-                             parent="${body_link}"
-                             origin_xyz="0 0 ${(body_length + extension_length) / 2}"/>
-    </xacro:if>
+    <!-- Extension (always present for stable URDF link chain across cup configurations).
+         When extension_length=0, the link sits at the body's top edge with no geometry. -->
+    <xacro:cylinder_link name="${prefix}epick_extension"
+                         radius="${extension_radius}"
+                         length="${extension_length}"
+                         color="${body_color}"
+                         parent="${body_link}"
+                         origin_xyz="0 0 ${(body_length + extension_length) / 2}"/>
+    <xacro:property name="suction_cup_parent" value="${prefix}epick_extension"/>
+    <xacro:property name="suction_cup_parent_length" value="${extension_length}"/>
 
     <!-- Suction Cup -->
     <xacro:cylinder_link name="${prefix}epick_suction_cup"
